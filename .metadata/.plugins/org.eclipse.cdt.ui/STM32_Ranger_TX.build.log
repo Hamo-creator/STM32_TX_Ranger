@@ -1,0 +1,10 @@
+14:45:17 **** Incremental Build of configuration Debug for project STM32_Ranger_TX ****
+make -j4 all 
+arm-none-eabi-size  STM32_Ranger_TX.elf 
+   text	   data	    bss	    dec	    hex	filename
+  17796	    272	   2104	  20172	   4ecc	STM32_Ranger_TX.elf
+Finished building: default.size.stdout
+ 
+
+14:45:18 Build Finished. 0 errors, 0 warnings. (took 474ms)
+

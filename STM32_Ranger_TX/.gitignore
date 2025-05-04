@@ -1,0 +1,12 @@
+.mxproject
+/Drivers
+/Debug
+/.settings
+.project
+/Startup
+*.launch
+*.ioc
+*.ld
+*.lock
+*.log
+*.metadata

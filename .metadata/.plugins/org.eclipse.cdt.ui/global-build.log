@@ -1,0 +1,29 @@
+14:45:04 **** Incremental Build of configuration Debug for project STM32_Ranger_TX ****
+make -j4 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F401xC -c -I../Core/Inc -I../Drivers/STM32F4xx_HAL_Driver/Inc -I../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "Core/Src/main.o"
+../Core/Src/main.c: In function 'checkStickMove':
+../Core/Src/main.c:156:8: warning: implicit declaration of function 'abs' [-Wimplicit-function-declaration]
+  156 |     if(abs(previous_throttle - rcChannels[THROTTLE]) < 30){
+      |        ^~~
+../Core/Src/main.c:32:1: note: include '<stdlib.h>' or provide a declaration of 'abs'
+   31 | #include "config.h"
+  +++ |+#include <stdlib.h>
+   32 | 
+arm-none-eabi-gcc -o "STM32_Ranger_TX.elf" @"objects.list"   -mcpu=cortex-m4 -T"C:\Users\khali\OneDrive\Desktop\MQ-9 Reaper\Software\ExpressLRS\STM32_TX_Ranger\STM32_Ranger_TX\STM32F401RCTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="STM32_Ranger_TX.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: STM32_Ranger_TX.elf
+ 
+arm-none-eabi-size  STM32_Ranger_TX.elf 
+arm-none-eabi-objdump -h -S STM32_Ranger_TX.elf  > "STM32_Ranger_TX.list"
+   text	   data	    bss	    dec	    hex	filename
+  17796	    272	   2104	  20172	   4ecc	STM32_Ranger_TX.elf
+Finished building: default.size.stdout
+ 
+Finished building: STM32_Ranger_TX.list
+ 
+14:45:17 **** Incremental Build of configuration Debug for project STM32_Ranger_TX ****
+make -j4 all 
+arm-none-eabi-size  STM32_Ranger_TX.elf 
+   text	   data	    bss	    dec	    hex	filename
+  17796	    272	   2104	  20172	   4ecc	STM32_Ranger_TX.elf
+Finished building: default.size.stdout
+ 
