@@ -363,14 +363,19 @@ int main(void)
 		  else {
 			  CRSF_PrepareDataPacket(crsfPacket, rcChannels);
 			  CRSF_WritePacket(crsfPacket, CRSF_PACKET_SIZE);
+//		      if(crsfTime >= overFlowTime){
+//		    	  crsfTime = 0;
+//		      }
+//			  loopCount = 0;
 		  }
 
-//		  HAL_GPIO_TogglePin(UART_LED_GPIO_Port, UART_LED_Pin);
+		  HAL_GPIO_TogglePin(UART_LED_GPIO_Port, UART_LED_Pin);
 	      crsfTime = currentMicros + CRSF_TIME_BETWEEN_FRAMES_US;
-//	      if(crsfTime >= overFlowTime){
-//	    	  crsfTime = 0;
-//	    	  loopCount = 0;
-//	      }
+//	      crsfTime = currentMicros - CRSF_TIME_BETWEEN_FRAMES_US;
+	      if(crsfTime >= overFlowTime){
+	    	  crsfTime = 0;
+	    	  loopCount = 0;
+	      }
 	  }
 
   }

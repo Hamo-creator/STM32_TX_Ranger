@@ -1,4 +1,4 @@
-14:45:04 **** Incremental Build of configuration Debug for project STM32_Ranger_TX ****
+18:34:07 **** Incremental Build of configuration Debug for project STM32_Ranger_TX ****
 make -j4 all 
 arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F401xC -c -I../Core/Inc -I../Drivers/STM32F4xx_HAL_Driver/Inc -I../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "Core/Src/main.o"
 ../Core/Src/main.c: In function 'checkStickMove':
@@ -15,15 +15,8 @@ Finished building target: STM32_Ranger_TX.elf
 arm-none-eabi-size  STM32_Ranger_TX.elf 
 arm-none-eabi-objdump -h -S STM32_Ranger_TX.elf  > "STM32_Ranger_TX.list"
    text	   data	    bss	    dec	    hex	filename
-  17796	    272	   2104	  20172	   4ecc	STM32_Ranger_TX.elf
+  17700	    268	   2108	  20076	   4e6c	STM32_Ranger_TX.elf
 Finished building: default.size.stdout
  
 Finished building: STM32_Ranger_TX.list
- 
-14:45:17 **** Incremental Build of configuration Debug for project STM32_Ranger_TX ****
-make -j4 all 
-arm-none-eabi-size  STM32_Ranger_TX.elf 
-   text	   data	    bss	    dec	    hex	filename
-  17796	    272	   2104	  20172	   4ecc	STM32_Ranger_TX.elf
-Finished building: default.size.stdout
  
