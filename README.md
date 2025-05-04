@@ -86,5 +86,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## Acknowledgments
 
 - Based on the CRSF protocol implementation
-- Inspired by commercial RC transmitter designs
+- Inspired by the work of kkbin505: https://github.com/kkbin505/Arduino-Transmitter-for-ELRS
 - Uses STM32 HAL libraries for hardware abstraction 
