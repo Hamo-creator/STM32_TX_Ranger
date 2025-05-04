@@ -89,8 +89,8 @@ uint8_t sample_index = 0;
 
 float batteryVoltage;
 
-const float warningVoltage = 7.8;
-const float dangerVoltage = 7.5;
+const float warningVoltage = 7.6;
+const float dangerVoltage = 7.4;
 
 uint8_t crsfPacket[CRSF_PACKET_SIZE];
 uint8_t crsfCmdPacket[CRSF_CMD_PACKET_SIZE];
@@ -294,15 +294,11 @@ int main(void)
 
 	  batteryVoltage = readBatteryVoltage();
 
-	  if (batteryVoltage <= warningVoltage && batteryVoltage > dangerVoltage) {
-	      HAL_GPIO_WritePin(GPIOC, BatVolWarning_Pin, GPIO_PIN_SET);
-	      HAL_GPIO_WritePin(GPIOC, BatVolDanger_Pin, GPIO_PIN_RESET);
-	  } else if (batteryVoltage < dangerVoltage) {
-	      HAL_GPIO_WritePin(GPIOC, BatVolDanger_Pin, GPIO_PIN_SET);
-	      HAL_GPIO_WritePin(GPIOC, BatVolWarning_Pin, GPIO_PIN_RESET);
-	  } else {
-	      HAL_GPIO_WritePin(GPIOC, BatVolWarning_Pin, GPIO_PIN_RESET);
-	      HAL_GPIO_WritePin(GPIOC, BatVolDanger_Pin, GPIO_PIN_RESET);
+	  if(batteryVoltage <= warningVoltage && batteryVoltage > dangerVoltage){
+		  HAL_GPIO_WritePin(GPIOC, BatVolWarning_Pin, GPIO_PIN_SET);
+	  }
+	  if(batteryVoltage <= dangerVoltage){
+		  HAL_GPIO_WritePin(GPIOC, BatVolDanger_Pin, GPIO_PIN_SET);
 	  }
 
 	  // Store latest ADC readings into the buffer

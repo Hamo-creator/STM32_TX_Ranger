@@ -89,8 +89,8 @@ uint8_t sample_index = 0;
 
 float batteryVoltage;
 
-const float warningVoltage = 7.8;
-const float dangerVoltage = 7.5;
+const float warningVoltage = 3.7;
+const float dangerVoltage = 3.4;
 
 uint8_t crsfPacket[CRSF_PACKET_SIZE];
 uint8_t crsfCmdPacket[CRSF_CMD_PACKET_SIZE];

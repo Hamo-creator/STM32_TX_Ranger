@@ -59,6 +59,10 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define UART_LED_Pin GPIO_PIN_13
 #define UART_LED_GPIO_Port GPIOC
+#define BatVolWarning_Pin GPIO_PIN_14
+#define BatVolWarning_GPIO_Port GPIOC
+#define BatVolDanger_Pin GPIO_PIN_15
+#define BatVolDanger_GPIO_Port GPIOC
 #define SWITCH_ARM_Pin GPIO_PIN_0
 #define SWITCH_ARM_GPIO_Port GPIOC
 #define SWITCH_AUX2_Pin GPIO_PIN_1

@@ -89,9 +89,6 @@ uint8_t sample_index = 0;
 
 float batteryVoltage;
 
-const float warningVoltage = 7.8;
-const float dangerVoltage = 7.5;
-
 uint8_t crsfPacket[CRSF_PACKET_SIZE];
 uint8_t crsfCmdPacket[CRSF_CMD_PACKET_SIZE];
 int16_t rcChannels[CRSF_MAX_CHANNEL];
@@ -272,8 +269,6 @@ int main(void)
       rcChannels[i] = CRSF_DIGITAL_CHANNEL_MIN;
   }
 
-  HAL_GPIO_WritePin(UART_LED_GPIO_Port, UART_LED_Pin, GPIO_PIN_SET);
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -293,17 +288,6 @@ int main(void)
 	  }
 
 	  batteryVoltage = readBatteryVoltage();
-
-	  if (batteryVoltage <= warningVoltage && batteryVoltage > dangerVoltage) {
-	      HAL_GPIO_WritePin(GPIOC, BatVolWarning_Pin, GPIO_PIN_SET);
-	      HAL_GPIO_WritePin(GPIOC, BatVolDanger_Pin, GPIO_PIN_RESET);
-	  } else if (batteryVoltage < dangerVoltage) {
-	      HAL_GPIO_WritePin(GPIOC, BatVolDanger_Pin, GPIO_PIN_SET);
-	      HAL_GPIO_WritePin(GPIOC, BatVolWarning_Pin, GPIO_PIN_RESET);
-	  } else {
-	      HAL_GPIO_WritePin(GPIOC, BatVolWarning_Pin, GPIO_PIN_RESET);
-	      HAL_GPIO_WritePin(GPIOC, BatVolDanger_Pin, GPIO_PIN_RESET);
-	  }
 
 	  // Store latest ADC readings into the buffer
 	  Aileron_samples[sample_index]  = ADC_BUF[0];

@@ -50,14 +50,14 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(UART_LED_GPIO_Port, UART_LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, UART_LED_Pin|BatVolWarning_Pin|BatVolDanger_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : UART_LED_Pin */
-  GPIO_InitStruct.Pin = UART_LED_Pin;
+  /*Configure GPIO pins : UART_LED_Pin BatVolWarning_Pin BatVolDanger_Pin */
+  GPIO_InitStruct.Pin = UART_LED_Pin|BatVolWarning_Pin|BatVolDanger_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(UART_LED_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SWITCH_ARM_Pin SWITCH_AUX2_Pin SWITCH_AUX3_Pin SWITCH_AUX4_Pin */
   GPIO_InitStruct.Pin = SWITCH_ARM_Pin|SWITCH_AUX2_Pin|SWITCH_AUX3_Pin|SWITCH_AUX4_Pin;
