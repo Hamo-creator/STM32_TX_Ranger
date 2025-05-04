@@ -281,6 +281,12 @@ int main(void)
 
 	  uint32_t currentMicros = micros();
 
+	  // Handle micros() overflow
+	  if (currentMicros < crsfTime - CRSF_TIME_BETWEEN_FRAMES_US) {
+	      // We've had an overflow, reset the timing
+	      crsfTime = currentMicros + CRSF_TIME_BETWEEN_FRAMES_US;
+	  }
+
 	  batteryVoltage = readBatteryVoltage();
 
 	  // Store latest ADC readings into the buffer
