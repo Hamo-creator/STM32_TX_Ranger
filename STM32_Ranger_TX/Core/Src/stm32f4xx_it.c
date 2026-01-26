@@ -22,6 +22,7 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "crsf.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,6 +43,9 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 
+extern volatile uint8_t crsf_tx_busy;
+extern uint16_t oldPos;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -56,8 +60,11 @@
 
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_adc1;
+extern DMA_HandleTypeDef hdma_spi2_tx;
 extern DMA_HandleTypeDef hdma_usart1_tx;
+extern DMA_HandleTypeDef hdma_usart1_rx;
 extern UART_HandleTypeDef huart1;
+extern CrsfSerial_HandleTypeDef hcrsf;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -201,6 +208,20 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles DMA1 stream4 global interrupt.
+  */
+void DMA1_Stream4_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream4_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream4_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_spi2_tx);
+  /* USER CODE BEGIN DMA1_Stream4_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream4_IRQn 1 */
+}
+
+/**
   * @brief This function handles USART1 global interrupt.
   */
 void USART1_IRQHandler(void)
@@ -210,7 +231,24 @@ void USART1_IRQHandler(void)
   /* USER CODE END USART1_IRQn 0 */
   HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
+  // This callback is for IDLE line detection
+  // It will call HAL_UARTEx_RxEventCallback
 
+  // This is called when the UART transmission is truly complete (TC flag set)
+ //if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_TC)) {
+ if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE)) {
+      __HAL_UART_CLEAR_IDLEFLAG(&huart1);
+      hcrsf.idlecallback = true;
+      CrsfSerial_UART_IdleCallback(&hcrsf);
+//      uint16_t dmaPos =
+//      UART_RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart1.hdmarx);
+//      while (oldPos != dmaPos)
+//      {
+//    	  ProcessByte(&hcrsf, uartRxBuf[oldPos]);
+//          oldPos = (oldPos + 1) % UART_RX_BUFFER_SIZE;
+//      }
+     // HAL_UART_TxCpltCallback(&huart1);
+  }
   /* USER CODE END USART1_IRQn 1 */
 }
 
@@ -226,6 +264,20 @@ void DMA2_Stream0_IRQHandler(void)
   /* USER CODE BEGIN DMA2_Stream0_IRQn 1 */
 
   /* USER CODE END DMA2_Stream0_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA2 stream2 global interrupt.
+  */
+void DMA2_Stream2_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA2_Stream2_IRQn 0 */
+
+  /* USER CODE END DMA2_Stream2_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart1_rx);
+  /* USER CODE BEGIN DMA2_Stream2_IRQn 1 */
+
+  /* USER CODE END DMA2_Stream2_IRQn 1 */
 }
 
 /**
