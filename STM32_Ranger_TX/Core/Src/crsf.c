@@ -9,8 +9,15 @@
 #include "main.h"  // for UART handle
 
 
+volatile uint8_t crsf_tx_busy = 0;
+volatile uint32_t telemetry_count = 0;
+
+extern uint16_t oldPos;
+extern uint8_t  uartRxBuf[];
+
 // Replace with your actual UART handle
 extern UART_HandleTypeDef huart1;
+extern CrsfSerial_HandleTypeDef hcrsf;
 
 // crc implementation from CRSF protocol document rev7
 
@@ -51,7 +58,8 @@ static uint8_t crsf_crc8tab[256] = {
 
 
 // === CRC8 Calculation ===
-static uint8_t crsf_crc8(const uint8_t *ptr, uint8_t len) {
+//static uint8_t crsf_crc8(const uint8_t *ptr, uint8_t len) {
+uint8_t crsf_crc8(const uint8_t *ptr, uint8_t len) {
     uint8_t crc = 0;
     for (uint8_t i = 0; i < len; i++) {
         crc = crsf_crc8tab[crc ^ *ptr++];
@@ -59,10 +67,27 @@ static uint8_t crsf_crc8(const uint8_t *ptr, uint8_t len) {
     return crc;
 }
 
-// === Initialization ===
-void CRSF_Begin(void) {
-    // UART should already be initialized using MX_USARTx_UART_Init()
-    // This function can be used to reset buffers or state if needed
+uint8_t crc8_dvb_s2(const uint8_t *data, uint8_t len)
+{
+    uint8_t crc = 0;
+    for (uint8_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++)
+            crc = (crc & 0x80) ? (crc << 1) ^ 0xD5 : (crc << 1);
+    }
+    return crc;
+}
+
+void CRSF_SetRxMode(void)
+{
+    HAL_GPIO_WritePin(TX_RX_EN_GPIO_Port, TX_RX_EN_Pin, GPIO_PIN_SET);   // Enable receiver
+    hcrsf.rx_busy = true;
+}
+
+void CRSF_SetTxMode(void)
+{
+    HAL_GPIO_WritePin(TX_RX_EN_GPIO_Port, TX_RX_EN_Pin, GPIO_PIN_RESET); // Disable receiver → TX active
+    //hcrsf.rx_busy = false;
 }
 
 // === Packet Preparation: Channels ===
@@ -109,10 +134,196 @@ void CRSF_PrepareCmdPacket(uint8_t packetCmd[], uint8_t command, uint8_t value) 
     packetCmd[7] = crsf_crc8(&packetCmd[2], packetCmd[1] - 1);
 }
 
+
 // === UART Transmission ===
-void CRSF_WritePacket(uint8_t packet[], uint8_t packetLength) {
-//    HAL_UART_Transmit(&huart1, packet, packetLength, HAL_MAX_DELAY);
-    HAL_UART_Transmit_DMA(&huart1, packet, packetLength);
+uint8_t CRSF_WritePacket(uint8_t packet[], uint8_t packetLength)
+{
+    // 1. Check if the UART is already busy.
+    if (crsf_tx_busy) {
+        return HAL_BUSY;
+    }
+
+    CRSF_SetTxMode();
+
+	hcrsf.rx_busy = false;
+
+    hcrsf.tx_busy = true;
+
+    hcrsf.idlecallback = false;
+
+    // Clear TC flag before starting transmission to prevent immediate interrupt
+    //__HAL_UART_CLEAR_FLAG(hcrsf->huart, UART_FLAG_TC);
+
+    // Enable TC interrupt to know when transmission is truly complete
+    //__HAL_UART_ENABLE_IT(hcrsf->huart, UART_IT_TC);
+    // 6. Start the DMA transfer.
+    return HAL_UART_Transmit_DMA(&huart1, packet, packetLength);
 }
+
+static void ShiftBuffer(CrsfSerial_HandleTypeDef *hcrsf, uint8_t cnt) {
+    if (cnt >= hcrsf->rxBufPos) {
+        hcrsf->rxBufPos = 0;
+        return;
+    }
+    memmove(hcrsf->rxBuf, hcrsf->rxBuf + cnt, hcrsf->rxBufPos - cnt);
+    hcrsf->rxBufPos -= cnt;
+}
+
+void ProcessByte(CrsfSerial_HandleTypeDef *hcrsf, uint8_t b) {
+    if (hcrsf->rxBufPos >= sizeof(hcrsf->rxBuf)) {
+        hcrsf->rxBufPos = 0; // reset on overflow
+    }
+
+	hcrsf->rxBuf[hcrsf->rxBufPos++] = b;
+    if (hcrsf->rxBufPos >= 2) {
+        uint8_t len = hcrsf->rxBuf[1];
+        if (len >= 3 && hcrsf->rxBufPos >= len + 2) {
+            uint8_t crc = crc8_dvb_s2(hcrsf->rxBuf + 2, len - 1);
+            if (crc == hcrsf->rxBuf[len + 1]) {
+                HandlePacket(hcrsf, len);
+                ShiftBuffer(hcrsf, len + 2);
+            } else {	// CRC mismatch, discard this packet
+                ShiftBuffer(hcrsf, 1);
+            }
+            ShiftBuffer(hcrsf, len + 2); // Shift buffer past the processed/discarded packet
+        } else if (len > CRSF_MAX_PACKET_SIZE) {
+            // Packet too long, discard
+        	ShiftBuffer(hcrsf, 1); // Discard first byte and try again
+        }
+    }
+}
+
+// This is where you handle telemetry frames from the RadioMaster TX
+void HandlePacket(CrsfSerial_HandleTypeDef *hcrsf, uint8_t len)
+{
+	telemetry_count++;
+    uint8_t type = hcrsf->rxBuf[2];  // Frame type byte
+
+    switch (type) {
+    case CRSF_FRAMETYPE_BATTERY_SENSOR:	//BATTERY Telemetry
+        {
+            // Example payload: voltage in deciV, current in 10mA units
+            hcrsf->telemetry_channels[3] = (hcrsf->rxBuf[3] << 8) | hcrsf->rxBuf[4];
+            hcrsf->telemetry_channels[4] = (hcrsf->rxBuf[5] << 8) | hcrsf->rxBuf[6];
+            //uint16_t voltage = (hcrsf->rxBuf[3] << 8) | hcrsf->rxBuf[4];
+            //uint16_t current = (hcrsf->rxBuf[5] << 8) | hcrsf->rxBuf[6];
+            // Store or print it
+            //printf("Telemetry: Battery %u dV, %u cA\r\n", voltage, current);
+        }
+        break;
+
+    case CRSF_FRAMETYPE_LINK_STATISTICS: // LINK_STATISTICS
+        {
+            uint8_t uplink_rssi1 = hcrsf->rxBuf[3];
+            uint8_t uplink_rssi2 = hcrsf->rxBuf[4];
+            uint8_t uplink_snr   = hcrsf->rxBuf[5];
+            printf("Link: RSSI1=%u, RSSI2=%u, SNR=%d\r\n",
+                   uplink_rssi1, uplink_rssi2, (int8_t)uplink_snr);
+        }
+        break;
+
+    case CRSF_FRAMETYPE_ATTITUDE: // ATTITUDE
+        {
+            int16_t pitch = (hcrsf->rxBuf[3] << 8) | hcrsf->rxBuf[4];
+            int16_t roll  = (hcrsf->rxBuf[5] << 8) | hcrsf->rxBuf[6];
+            int16_t yaw   = (hcrsf->rxBuf[7] << 8) | hcrsf->rxBuf[8];
+            printf("Attitude: P=%d, R=%d, Y=%d\r\n", pitch, roll, yaw);
+        }
+        break;
+
+    default:
+        // Unknown / unhandled frame type
+        break;
+    }
+}
+
+void CrsfSerial_Loop(CrsfSerial_HandleTypeDef *hcrsf) {
+    if (hcrsf->linkIsUp && HAL_GetTick() - hcrsf->lastChannelsPacket > CRSF_FAILSAFE_STAGE1_MS) {
+        if (hcrsf->onLinkDown){
+        	hcrsf->onLinkDown();
+        }
+        hcrsf->linkIsUp = false;
+    }
+}
+
+HAL_StatusTypeDef Crsf_SendTelemetryPoll(CrsfSerial_HandleTypeDef *hcrsf) {
+    uint8_t packet[4]; // Address + Length + Type + CRC
+    uint8_t payload_len = 0; // No payload for a poll
+    uint8_t total_len = payload_len + 2; // Type + Payload + CRC
+
+    packet[0] = ADDR_FC; // Destination address (FC)
+    packet[1] = total_len;
+    packet[2] = CRSF_FRAMETYPE_CMD; // Poll command
+    packet[total_len + 1] = crc8_dvb_s2(&packet[2], payload_len + 1);
+
+    return CRSF_WritePacket(packet, total_len + 2);
+    //return Crsf_TransmitPacket(hcrsf, packet, total_len + 2);
+}
+
+void CrsfSerial_UART_IdleCallback(CrsfSerial_HandleTypeDef *hcrsf)
+{
+    uint16_t dmaPos = UART_RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hcrsf->huart->hdmarx);
+    uint16_t len;
+
+    hcrsf->idlecallback = true;
+
+    if (dmaPos != oldPos) {
+        if (dmaPos > oldPos) {
+            len = dmaPos - oldPos;
+            for (uint16_t i = 0; i < len; i++) {
+                ProcessByte(hcrsf, uartRxBuf[oldPos + i]);
+            }
+        } else {
+            len = UART_RX_BUFFER_SIZE - oldPos;
+            for (uint16_t i = 0; i < len; i++) {
+                ProcessByte(hcrsf, uartRxBuf[oldPos + i]);
+            }
+            for (uint16_t i = 0; i < dmaPos; i++) {
+                ProcessByte(hcrsf, uartRxBuf[i]);
+            }
+        }
+
+        oldPos = dmaPos;
+        if (oldPos >= UART_RX_BUFFER_SIZE) oldPos = 0;
+    }
+}
+
+// This is called when the DMA has received data (IDLE line detected)
+/*void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {//CrsfSerial_HandleTypeDef hcrsf;
+    // Assuming a single CRSF handle for simplicity, adapt for multiple if needed
+   // extern CrsfHandle_t crsf_handle_tx; // For TX side
+
+    //if (huart->Instance == crsf_handle_tx.huart->Instance) {
+    if (huart->Instance == USART1) {
+        // This is the TX side receiving telemetry from FC
+//    	hcrsf.rx_busy = false;
+        // Process bytes from the DMA buffer
+        for (uint16_t i = 0; i < Size; i++) {
+        	ProcessByte(&hcrsf, huart->pRxBuffPtr[i]);
+        }
+        // Re-arm DMA reception
+        HAL_UARTEx_ReceiveToIdle_DMA(huart, huart->pRxBuffPtr, hcrsf.rxBufPos);
+
+        //CRSF_SetTxMode();
+    }
+}*/
+
+// This is called when the UART transmission is truly complete (TC flag set)
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+    //extern CrsfHandle_t crsf_handle_tx; // For TX side
+
+    if (huart->Instance == USART1) {
+        // TX side: Transmission complete, switch back to RX mode
+    	CRSF_SetRxMode();
+    	hcrsf.tx_busy = false;
+    	//hcrsf.rx_busy = false;
+        // You need to implement CRSF_SetRxMode() in your main application code
+    }
+    // Disable TC interrupt after handling
+    //__HAL_UART_DISABLE_IT(huart, UART_IT_TC);
+}
+
+// --- External Global Variables (for debugging) ---
+volatile uint8_t g_last_crsf_packet_type = 0;
 
 
