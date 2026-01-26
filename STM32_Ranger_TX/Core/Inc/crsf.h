@@ -10,21 +10,34 @@
 
 #include "stm32f4xx_hal.h"
 #include <stdint.h>
+#include <stdbool.h>
 #include <stddef.h>
 
 extern UART_HandleTypeDef huart1;
 
+#define UART_RX_BUFFER_SIZE 	128
+extern uint8_t uartRxBuf[UART_RX_BUFFER_SIZE];
+
+extern volatile uint8_t crsf_tx_busy;
+
+extern volatile uint8_t g_last_crsf_packet_type;
+
+#define CRSF_PACKET_TIMEOUT_MS     100
+#define CRSF_FAILSAFE_STAGE1_MS    300
 // Protocol configuration
+#define CRSF_MAX_PACKET_SIZE  		  64
+#define CRSF_NUM_CHANNELS		      16
 #define CRSF_MAX_CHANNEL              16
 #define CRSF_FRAME_SIZE_MAX           64
 #define RADIO_ADDRESS                 0xEA
 #define TYPE_CHANNELS                 0x16
 
 #define CRSF_DIGITAL_CHANNEL_MIN      172
+#define CRSF_DIGITAL_CHANNEL_MID	  992
 #define CRSF_DIGITAL_CHANNEL_MAX      1811
 
 #define CRSF_TIME_NEEDED_PER_FRAME_US 1100
-#define SERIAL_BAUDRATE               115200
+#define SERIAL_BAUDRATE               420000
 #define CRSF_TIME_BETWEEN_FRAMES_US   4000
 
 #define CRSF_PAYLOAD_OFFSET           offsetof(crsfFrameDef_t, type)
@@ -35,6 +48,14 @@ extern UART_HandleTypeDef huart1;
 #define CRSF_PACKET_SIZE              26
 #define CRSF_FRAME_LENGTH             24
 #define CRSF_CMD_PACKET_SIZE          8
+#define CRSF_FRAMETYPE_CMD			  0x28
+#define CRSF_FRAMETYPE_SET_RC_CHANNELS_PACKED       0x2B
+
+#define CRSF_FRAMETYPE_BATTERY_SENSOR	0x08
+#define CRSF_FRAMETYPE_LINK_STATISTICS	0x14
+#define CRSF_FRAMETYPE_GPS				0x02
+#define CRSF_FRAMETYPE_FLIGHT_MODE		0x21
+#define CRSF_FRAMETYPE_ATTITUDE			0x1E
 
 // ELRS command constants
 #define ELRS_ADDRESS                  0xEE
@@ -49,6 +70,34 @@ extern UART_HandleTypeDef huart1;
 #define ELRS_START_COMMAND            0x04
 #define TYPE_SETTINGS_WRITE           0x2D
 #define ADDR_RADIO                    0xEA
+#define ADDR_FC						  0xC8
+
+typedef struct {
+    UART_HandleTypeDef *huart;
+
+    uint8_t rxBuf[CRSF_FRAME_SIZE_MAX];
+    uint8_t rxBufPos;
+    uint32_t baud;
+    uint32_t lastReceive;
+    uint32_t lastChannelsPacket;
+    volatile bool rx_packet_ready;      // Flag set when a full packet is received
+    bool linkIsUp;
+    uint32_t passthroughBaud;
+    int channels[CRSF_MAX_CHANNEL];
+    int telemetry_channels[CRSF_MAX_CHANNEL];
+    uint32_t last_channels_packet_ms;   // Timestamp of last RC channels packet
+
+    // TX State
+    volatile bool tx_busy;              // Flag indicating if UART TX is busy
+    volatile bool rx_busy;				// FLag indicating if UART RX is busy
+    volatile bool idlecallback;
+
+    // Event Handlers
+    void (*onLinkUp)(void);
+    void (*onLinkDown)(void);
+    void (*onOobData)(uint8_t b);
+    void (*onPacketChannels)(void);
+} CrsfSerial_HandleTypeDef;
 
 typedef enum {
     STATE_STARTUP,
@@ -59,9 +108,11 @@ typedef enum {
 } CRSF_State;
 
 // === Function declarations (formerly class methods) ===
+void CRSF_SetRxMode(void);
 
-// Initialize CRSF protocol (e.g., UART or variables)
-void CRSF_Begin(void);
+void CRSF_SetTxMode(void);
+
+uint8_t crsf_crc8(const uint8_t *ptr, uint8_t len);
 
 // Prepares a CRSF data packet from channel values
 void CRSF_PrepareDataPacket(uint8_t packet[], int16_t channels[]);
@@ -70,7 +121,27 @@ void CRSF_PrepareDataPacket(uint8_t packet[], int16_t channels[]);
 void CRSF_PrepareCmdPacket(uint8_t packetCmd[], uint8_t command, uint8_t value);
 
 // Writes a CRSF packet over UART
-void CRSF_WritePacket(uint8_t packet[], uint8_t packetLength);
+//void CRSF_WritePacket(uint8_t packet[], uint8_t packetLength);
+uint8_t CRSF_WritePacket(uint8_t packet[], uint8_t packetLength);
+
+// CRSF Loop function
+void CrsfSerial_Loop(CrsfSerial_HandleTypeDef *hcrsf);
+
+/**
+ * @brief Processes a single byte received from UART.
+ *        This function should be called from the UART RX callback (e.g., HAL_UARTEx_RxEventCallback).
+ * @param handle Pointer to the CRSF handle structure.
+ * @param byte The received byte.
+ */
+void ProcessByte(CrsfSerial_HandleTypeDef *hcrsf, uint8_t b);
+
+/**
+ * @brief Sends a CRSF telemetry poll packet.
+ *        Typically used on the Transmitter side.
+ * @param handle Pointer to the CRSF handle structure.
+ * @return HAL_StatusTypeDef HAL_OK if packet is sent, HAL_BUSY if TX is busy.
+ */
+HAL_StatusTypeDef Crsf_SendTelemetryPoll(CrsfSerial_HandleTypeDef *hcrsf);
 
 #endif // CRSF_PROTOCOL_H
 
