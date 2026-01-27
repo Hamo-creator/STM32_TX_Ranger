@@ -214,6 +214,18 @@ void HandlePacket(CrsfSerial_HandleTypeDef *hcrsf, uint8_t len)
 
     case CRSF_FRAMETYPE_LINK_STATISTICS: // LINK_STATISTICS
         {
+			// Copy the raw bytes into our struct
+            memcpy(&LinkStats, hdr->data, sizeof(crsf_link_statistics_t));
+    
+            // CRSF sends RSSI as positive numbers representing -dBm.
+            // Example: 70 actually means -70dBm.
+            display_rssi = (int16_t)LinkStats.uplink_rssi_ant1 * -1;
+            display_lq = LinkStats.uplink_lq;
+    
+            // Optional: Call a callback to update your screen
+            if (hcrsf->onPacketLinkStatistics) {
+                hcrsf->onPacketLinkStatistics();
+            }
             uint8_t uplink_rssi1 = hcrsf->rxBuf[3];
             uint8_t uplink_rssi2 = hcrsf->rxBuf[4];
             uint8_t uplink_snr   = hcrsf->rxBuf[5];
