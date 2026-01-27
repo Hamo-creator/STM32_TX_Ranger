@@ -64,7 +64,7 @@ CrsfSerial_HandleTypeDef hcrsf;
 #define UART_RX_BUFFER_SIZE 128	// 64
 uint8_t  uartRxBuf[UART_RX_BUFFER_SIZE];
 uint16_t oldPos = 0;
-
+// static uint16_t oldPos = 0;
 uint16_t ADC_BUF[6];
 
 #define ADC_MAX_VALUE      4095.0f
@@ -455,6 +455,11 @@ int main(void)
 				  packet_counter++; // Increment the counter towards the next poll
 			  }
 			  loopEndtime = (micros() - loopStarttime);
+		  }
+		  // Handle Telemetry Reception out of the ISR
+		  if (hcrsf.idlecallback) {
+			  hcrsf.idelcallback = false;
+			  CrsfSerial_UART_IdleCallback(&hcrsf);
 		  }
 
 	      crsfTime = currentMicros + CRSF_TIME_BETWEEN_FRAMES_US;
