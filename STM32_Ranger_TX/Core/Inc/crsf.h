@@ -108,6 +108,19 @@ typedef enum {
     STATE_NORMAL
 } CRSF_State;
 
+typedef struct {
+    uint8_t uplink_rssi_ant1;    // RSSI in dBm * -1 (e.g., 60 = -60dBm)
+    uint8_t uplink_rssi_ant2;
+    uint8_t uplink_lq;           // Link Quality (0 - 100)
+    int8_t  uplink_snr;          // Signal-to-Noise Ratio
+    uint8_t active_antenna;      // 0 or 1
+    uint8_t rf_mode;             // 0=4Hz, 1=50Hz, 2=150Hz, etc.
+    uint8_t uplink_tx_power;     // 0=0mW, 1=10mW, 2=25mW, etc.
+    uint8_t downlink_rssi;
+    uint8_t downlink_lq;
+    int8_t  downlink_snr;
+} crsf_link_statistics_t;
+
 // === Function declarations (formerly class methods) ===
 void CRSF_SetRxMode(void);
 
