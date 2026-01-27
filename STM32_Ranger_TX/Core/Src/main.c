@@ -456,6 +456,17 @@ int main(void)
 			  }
 			  loopEndtime = (micros() - loopStarttime);
 		  }
+		  
+		  /* Recovery Logic: If UART crashed due to noise/collision */
+		  if (hcrsf.uart_error_occurred) {
+			  hcrsf.uart_error_occurred = false;
+			  
+			  // Stop and restart DMA to clear the internal HAL state
+			  HAL_UART_DMAStop(&huart1);
+			  CRSF_SetRXMode();
+			  HAL_UART_ReceiveDMA(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
+		  }
+		  
 		  // Handle Telemetry Reception out of the ISR
 		  if (hcrsf.idlecallback) {
 			  hcrsf.idelcallback = false;
