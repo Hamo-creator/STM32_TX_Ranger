@@ -239,14 +239,14 @@ void USART1_IRQHandler(void)
  if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE)) {
       __HAL_UART_CLEAR_IDLEFLAG(&huart1);
       hcrsf.idlecallback = true;
-      CrsfSerial_UART_IdleCallback(&hcrsf);
-//      uint16_t dmaPos =
-//      UART_RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart1.hdmarx);
-//      while (oldPos != dmaPos)
-//      {
-//    	  ProcessByte(&hcrsf, uartRxBuf[oldPos]);
-//          oldPos = (oldPos + 1) % UART_RX_BUFFER_SIZE;
-//      }
+ //     CrsfSerial_UART_IdleCallback(&hcrsf);
+ //      uint16_t dmaPos =
+ //      UART_RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart1.hdmarx);
+ //      while (oldPos != dmaPos)
+ //      {
+ //    	  ProcessByte(&hcrsf, uartRxBuf[oldPos]);
+ //          oldPos = (oldPos + 1) % UART_RX_BUFFER_SIZE;
+ //      }
      // HAL_UART_TxCpltCallback(&huart1);
   }
   /* USER CODE END USART1_IRQn 1 */
