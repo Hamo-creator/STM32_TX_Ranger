@@ -231,6 +231,19 @@ void USART1_IRQHandler(void)
   /* USER CODE END USART1_IRQn 0 */
   HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
+  /* 1. Check for Errors (Noise, Framing, Overrun) */
+  // If an error occurs, the HAL usually stops the UART/DMA state machine.
+  if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_ORE) || 
+        __HAL_UART_GET_FLAG(&huart1, UART_FLAG_FE)  || 
+        __HAL_UART_GET_FLAG(&huart1, UART_FLAG_NE)) 
+    {
+        __HAL_UART_CLEAR_FEFLAG(&huart1);
+        __HAL_UART_CLEAR_NEFLAG(&huart1);
+        __HAL_UART_CLEAR_OREFLAG(&huart1);
+        
+        // Signal a "Reset" is needed in the main loop
+        hcrsf.uart_error_occurred = true; 
+   }
   // This callback is for IDLE line detection
   // It will call HAL_UARTEx_RxEventCallback
 
@@ -240,13 +253,6 @@ void USART1_IRQHandler(void)
       __HAL_UART_CLEAR_IDLEFLAG(&huart1);
       hcrsf.idlecallback = true;
  //     CrsfSerial_UART_IdleCallback(&hcrsf);
- //      uint16_t dmaPos =
- //      UART_RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart1.hdmarx);
- //      while (oldPos != dmaPos)
- //      {
- //    	  ProcessByte(&hcrsf, uartRxBuf[oldPos]);
- //          oldPos = (oldPos + 1) % UART_RX_BUFFER_SIZE;
- //      }
      // HAL_UART_TxCpltCallback(&huart1);
   }
   /* USER CODE END USART1_IRQn 1 */
