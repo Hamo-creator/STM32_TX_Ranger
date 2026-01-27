@@ -266,18 +266,6 @@ int main(void)
   // Strating ADC
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *)ADC_BUF, 6);
 
-  // Start CRSF UART reception (for telemetry from FC)
-  // For half-duplex, ensure the pin is in RX mode initially
-  CRSF_SetRxMode();
-  // Enable IDLE line interrupt for packet detection
-  //__HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
-
- // HAL_UART_Receive_DMA(hcrsf.huart, rx_dma_buffer, rx_dma_buffer_size);
-  HAL_UART_Receive_DMA(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
-  __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
-
-  //HAL_UARTEx_ReceiveToIdle_IT(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
-
   // inialize rc data
   for (uint8_t i = 0; i < CRSF_MAX_CHANNEL; i++) {
       rcChannels[i] = CRSF_DIGITAL_CHANNEL_MIN;
@@ -297,6 +285,18 @@ int main(void)
   HAL_Delay(1000);
   // Clear screen
   ST7735_FillScreen(BLACK);
+	
+  // Start CRSF UART reception (for telemetry from FC)
+  // For half-duplex, ensure the pin is in RX mode initially
+  CRSF_SetRxMode();
+  // Enable IDLE line interrupt for packet detection
+  //__HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
+
+  // HAL_UART_Receive_DMA(hcrsf.huart, rx_dma_buffer, rx_dma_buffer_size);
+  HAL_UART_Receive_DMA(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
+  __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
+
+  //HAL_UARTEx_ReceiveToIdle_IT(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
 
   /* USER CODE END 2 */
 
