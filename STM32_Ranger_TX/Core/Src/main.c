@@ -139,6 +139,11 @@ uint32_t next_rc_packet_time_us = 0;
 uint32_t packet_counter = 0;
 const uint32_t RC_PACKETS_PER_POLL = 2; // Send 1 poll for every 8 RC packets
 
+// Struct instance to read the struct element
+crsf_link_statistics_t LinkStats;
+int16_t display_rssi = 0;
+uint8_t display_lq = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -199,10 +204,29 @@ static inline uint16_t fastMap4095(uint16_t x, uint16_t out_min, uint16_t out_ma
     return (uint16_t)(((uint32_t)x * (out_max - out_min)) / 4095 + out_min);
 }
 
+void DWT_Init(void) {
+    // Enable the trace unit
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    // Unlock the DWT (necessary on some F4/F7 series)
+    DWT->LAR = 0xC5ACCE55; 
+    // Reset the cycle counter
+    DWT->CYCCNT = 0;
+    // Start the cycle counter
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+}
+
+uint32_t micros(void) {
+    // CYCCNT increments every CPU cycle. 
+    // For 100MHz, SystemCoreClock / 1000000 = 100.
+    return DWT->CYCCNT / (SystemCoreClock / 1000000);
+}
+
+/*
 uint32_t micros(void)
 {
     return DWT->CYCCNT / (SystemCoreClock / 1000000);
 }
+*/
 
 float Get_BatteryVoltage(void)
 {
@@ -242,6 +266,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+  DWT_Init(); // Initialize the cycle counter early
 
   /* USER CODE END SysInit */
 
@@ -253,11 +278,13 @@ int main(void)
   MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
 
+	/*
   // Enable DWT Cycle Counter
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // Enable access to DWT
   DWT->CYCCNT = 0;                                // Reset the counter
   DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;            // Enable the cycle counter
-
+  */
+	
   if (huart1.Instance == NULL) {
       // Error: UART not initialized
       Error_Handler();
@@ -432,7 +459,8 @@ int main(void)
 ////				  //next_rc_packet_time_us = currentMicros + CRSF_TIME_BETWEEN_FRAMES_US;
 ////			  }
 //		  }
-/*
+
+		  /*
 		  else {
 			  if ((micros() - currentMicros) >= CRSF_TIME_BETWEEN_FRAMES_US) {
 				  loopStarttime = micros();
@@ -444,7 +472,8 @@ int main(void)
 				  }
 				  loopEndtime = (micros() - loopStarttime);
 			  }
-		  }*/
+		  }
+		  */
 
 		  else {
 			  loopStarttime = micros();
