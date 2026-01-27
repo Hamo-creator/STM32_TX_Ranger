@@ -90,7 +90,8 @@ typedef struct {
     // TX State
     volatile bool tx_busy;              // Flag indicating if UART TX is busy
     volatile bool rx_busy;				// FLag indicating if UART RX is busy
-    volatile bool idlecallback;
+    volatile bool idlecallback;         // Flag indicating if call back should be called
+    volatile bool uart_error_occurred;  // Flag indicating if UART error occurred
 
     // Event Handlers
     void (*onLinkUp)(void);
