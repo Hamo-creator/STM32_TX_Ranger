@@ -144,20 +144,26 @@ uint8_t CRSF_WritePacket(uint8_t packet[], uint8_t packetLength)
     }
 
     CRSF_SetTxMode();
+    HAL_UART_DMAStop(&huart1);
 
 	hcrsf.rx_busy = false;
-
     hcrsf.tx_busy = true;
-
     hcrsf.idlecallback = false;
-
-    // Clear TC flag before starting transmission to prevent immediate interrupt
-    //__HAL_UART_CLEAR_FLAG(hcrsf->huart, UART_FLAG_TC);
-
-    // Enable TC interrupt to know when transmission is truly complete
-    //__HAL_UART_ENABLE_IT(hcrsf->huart, UART_IT_TC);
+	/*
     // 6. Start the DMA transfer.
-    return HAL_UART_Transmit_DMA(&huart1, packet, packetLength);
+    HAL_StatusTypeDef status = HAL_UART_Transmit_DMA(&huart1, packet, packetLength);
+	if (status == HAL_OK) {// Wait for TX to finish (or use the Timer method we discussed)
+        // Then immediately clear the echo and go back to RX
+        while (HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_TX);
+        
+        CRSF_SetRxMode();
+        
+        // RESTART DMA: This clears any "echo" bytes from the RX buffer
+        HAL_UART_DMAStop(&huart1);
+        HAL_UART_Receive_DMA(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
+    }
+	*/
+	return status;
 }
 
 static void ShiftBuffer(CrsfSerial_HandleTypeDef *hcrsf, uint8_t cnt) {
@@ -329,10 +335,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
     	CRSF_SetRxMode();
     	hcrsf.tx_busy = false;
     	//hcrsf.rx_busy = false;
-        // You need to implement CRSF_SetRxMode() in your main application code
+		// 2. RESTART receiving now that the line is clear
+        // This ensures the next byte from the Ranger goes to uartRxBuf[0]
+        HAL_UART_Receive_DMA(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
     }
-    // Disable TC interrupt after handling
-    //__HAL_UART_DISABLE_IT(huart, UART_IT_TC);
 }
 
 // --- External Global Variables (for debugging) ---
