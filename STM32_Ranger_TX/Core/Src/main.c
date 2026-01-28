@@ -235,6 +235,20 @@ float Get_BatteryVoltage(void)
     return vbat;
 }
 
+void Draw_Signal_Bar(uint8_t lq) {
+    uint16_t barColor = GREEN;
+    if (lq < 70) barColor = YELLOW;
+    if (lq < 45) barColor = RED;
+
+    // Draw background (empty bar)
+    ST7735_DrawRectangle(10, 150, 100, 10, WHITE); 
+    
+    // Draw the "fill" based on LQ percentage
+    // Map 0-100 to 0-98 pixels
+    uint8_t fillWidth = (lq * 98) / 100;
+    ST7735_FillRectangle(11, 151, fillWidth, 8, barColor);
+}
+
 /* USER CODE END 0 */
 
 /**
