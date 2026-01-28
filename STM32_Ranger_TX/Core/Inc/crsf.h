@@ -86,6 +86,10 @@ typedef struct {
     int channels[CRSF_MAX_CHANNEL];
     int telemetry_channels[CRSF_MAX_CHANNEL];
     uint32_t last_channels_packet_ms;   // Timestamp of last RC channels packet
+    
+    crsf_link_statistics_t linkStatistics;
+    crsf_sensor_battery_t batterySensor;
+    crsf_sensor_gps_t gpsSensor;
 
     // TX State
     volatile bool tx_busy;              // Flag indicating if UART TX is busy
@@ -108,6 +112,14 @@ typedef enum {
     STATE_NORMAL
 } CRSF_State;
 
+typedef struct crsf_sensor_battery_s
+{
+    uint32_t voltage;  // V * 10 big endian
+    uint32_t current;  // A * 10 big endian
+    uint32_t capacity; // mah big endian
+    uint32_t remaining; // %
+} PACKED crsf_sensor_battery_t;
+
 typedef struct {
     uint8_t uplink_rssi_ant1;    // RSSI in dBm * -1 (e.g., 60 = -60dBm)
     uint8_t uplink_rssi_ant2;
@@ -120,6 +132,16 @@ typedef struct {
     uint8_t downlink_lq;
     int8_t  downlink_snr;
 } crsf_link_statistics_t;
+
+typedef struct crsf_sensor_gps_s
+{
+    int32_t latitude;   // degree / 10,000,000 big endian
+    int32_t longitude;  // degree / 10,000,000 big endian
+    uint16_t groundspeed;  // km/h / 10 big endian
+    uint16_t heading;   // GPS heading, degree/100 big endian
+    uint16_t altitude;  // meters, +1000m big endian
+    uint8_t satellites; // satellites
+} PACKED crsf_sensor_gps_t;
 
 // === Function declarations (formerly class methods) ===
 void CRSF_SetRxMode(void);
