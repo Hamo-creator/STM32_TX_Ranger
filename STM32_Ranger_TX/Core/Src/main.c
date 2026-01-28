@@ -61,12 +61,14 @@ extern UART_HandleTypeDef huart1;
 // Global CRSF serial instance
 CrsfSerial_HandleTypeDef hcrsf;
 
+// UART RECEIVING
 #define UART_RX_BUFFER_SIZE 128	// 64
 uint8_t  uartRxBuf[UART_RX_BUFFER_SIZE];
 uint16_t oldPos = 0;
 // static uint16_t oldPos = 0;
-uint16_t ADC_BUF[6];
 
+// ADC
+uint16_t ADC_BUF[6];
 #define ADC_MAX_VALUE      4095.0f
 
 // Battery voltage
@@ -121,7 +123,6 @@ uint32_t currentMillis = 0;
 uint32_t loopStarttime = 0;
 uint32_t loopEndtime = 0;
 
-uint32_t BatShowCount = 0;
 uint8_t receive_status = 6;
 bool int_entered = false;
 
@@ -202,13 +203,14 @@ bool checkStickMove(){
 static inline uint16_t fastMap4095(uint16_t x, uint16_t out_min, uint16_t out_max)
 {
     return (uint16_t)(((uint32_t)x * (out_max - out_min)) / 4095 + out_min);
+	// return (uint16_t)((((uint32_t)x * (1639)) / 4095) + 172);
 }
 
 void DWT_Init(void) {
     // Enable the trace unit
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     // Unlock the DWT (necessary on some F4/F7 series)
-    DWT->LAR = 0xC5ACCE55; 
+    // DWT->LAR = 0xC5ACCE55; 
     // Reset the cycle counter
     DWT->CYCCNT = 0;
     // Start the cycle counter
@@ -220,13 +222,6 @@ uint32_t micros(void) {
     // For 100MHz, SystemCoreClock / 1000000 = 100.
     return DWT->CYCCNT / (SystemCoreClock / 1000000);
 }
-
-/*
-uint32_t micros(void)
-{
-    return DWT->CYCCNT / (SystemCoreClock / 1000000);
-}
-*/
 
 float Get_BatteryVoltage(void)
 {
@@ -277,13 +272,6 @@ int main(void)
   MX_USART1_UART_Init();
   MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
-
-	/*
-  // Enable DWT Cycle Counter
-  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // Enable access to DWT
-  DWT->CYCCNT = 0;                                // Reset the counter
-  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;            // Enable the cycle counter
-  */
 	
   if (huart1.Instance == NULL) {
       // Error: UART not initialized
@@ -313,17 +301,16 @@ int main(void)
   // Clear screen
   ST7735_FillScreen(BLACK);
 	
-  // Start CRSF UART reception (for telemetry from FC)
+  ST7735_WriteString(70, 10, "RC BAT:", Font_7x10, BLUE, BLACK);
+  ST7735_WriteString(70, 20, "FC BAT:", Font_7x10, BLUE, BLACK);
+	
   // For half-duplex, ensure the pin is in RX mode initially
   CRSF_SetRxMode();
-  // Enable IDLE line interrupt for packet detection
-  //__HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
-
-  // HAL_UART_Receive_DMA(hcrsf.huart, rx_dma_buffer, rx_dma_buffer_size);
+	
+  // Start CRSF UART reception (for telemetry from FC)
   HAL_UART_Receive_DMA(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
+  // Enable IDLE line interrupt for packet detection
   __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
-
-  //HAL_UARTEx_ReceiveToIdle_IT(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
 
   /* USER CODE END 2 */
 
@@ -338,15 +325,13 @@ int main(void)
     //  PHASE 1: READ AND PROCESS ALL INPUTS
     // ====================================================================
 	uint32_t currentMicros = micros();
-//	loopStarttime = micros();
+	loopStarttime = micros();
 
 	// Handle micros() overflow
 	if (currentMicros < crsfTime - CRSF_TIME_BETWEEN_FRAMES_US) {
 	    // We've had an overflow, reset the timing
 	    crsfTime = currentMicros + CRSF_TIME_BETWEEN_FRAMES_US;
 	}
-
-	//CRSF_SetRxMode();
 
 	// Read Switches
 	AUX_1 = HAL_GPIO_ReadPin(GPIOB, SW_AUX1_Pin);
@@ -396,20 +381,26 @@ int main(void)
 	rcChannels[AUX2] = (AUX_2 == GPIO_PIN_SET) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
 
 	// Handle LCD display updates (this can be slow, so it's good to limit its frequency)
-	if (BatShowCount++ > 400000) {
-		batteryVoltage = Get_BatteryVoltage();
-		ST7735_WriteString(70, 10, "RC BAT:", Font_7x10, BLUE, BLACK);
-		if (batteryVoltage > warningVoltage) {
-			ST7735_WriteFloat(120, 10, batteryVoltage, 2,Font_7x10, GREEN, BLACK);
-		} else if (batteryVoltage <= warningVoltage && batteryVoltage > dangerVoltage) {
-			ST7735_WriteFloat(120, 10, batteryVoltage, 2,Font_7x10, YELLOW, BLACK);
-		} else if (batteryVoltage < dangerVoltage) {
-			ST7735_WriteFloat(120, 10, batteryVoltage, 2,Font_7x10, RED, BLACK);
-		}
-		BatShowCount = 0;
-	}
+	static uint32_t lastDisplayUpdate = 0;
 
+    if (HAL_GetTick() - lastDisplayUpdate >= 200) { // Update 5 times per second
+        lastDisplayUpdate = HAL_GetTick();
+    
+        batteryVoltage = Get_BatteryVoltage();
+        // Only redraw the value, not the label "RC BAT:" to save time
+        if (batteryVoltage > warningVoltage) {
+            ST7735_WriteFloat(120, 10, batteryVoltage, 2, Font_7x10, GREEN, BLACK);
+        } else {
+            ST7735_WriteFloat(120, 10, batteryVoltage, 2, Font_7x10, RED, BLACK);
+        }
+    
+        // Future: Add RSSI/LQ updates here
+    }
 
+    // ====================================================================
+    //  PHASE 2: SETUP, GET CURRENT SETTING AND BIND
+    // ====================================================================
+	  
 	  if ((uint32_t)currentMicros >= crsfTime){
 		  //CRSF_SetTxMode();
 		  if(loopCount <= 500){	//500
@@ -418,8 +409,9 @@ int main(void)
 			  sendStatus_1 = CRSF_WritePacket(crsfPacket, CRSF_PACKET_SIZE);
 			  loopCount++;
 		  }
-
+			  
 		  else if (loopCount > 500 && loopCount <= 505) { // repeat 5 packets to avoid bad packet, change rate setting
+		      selectSetting();
 			  // Build commond packet
 			  if (currentSetting == 1 || currentSetting == 2) {
 				  CRSF_PrepareCmdPacket(crsfCmdPacket, ELRS_PKT_RATE_COMMAND, currentPktRate);
@@ -452,60 +444,37 @@ int main(void)
 //			  }
 //			  loopCount++;
 //		  }
-//		  else if (packet_counter >= RC_PACKETS_PER_POLL) {
-// 			  CRSF_SetRxMode();
-////			  if (Crsf_SendTelemetryPoll(&hcrsf) == HAL_OK) {
-//				  packet_counter = 0; // Reset the counter
-////				  //next_rc_packet_time_us = currentMicros + CRSF_TIME_BETWEEN_FRAMES_US;
-////			  }
-//		  }
 
-		  /*
+    // ====================================================================
+    //  PHASE 2: SETUP, GET CURRENT SETTING AND BIND
+    // ====================================================================
+			  
 		  else {
-			  if ((micros() - currentMicros) >= CRSF_TIME_BETWEEN_FRAMES_US) {
-				  loopStarttime = micros();
-				  //CRSF_SetTxMode();
-				  CRSF_PrepareDataPacket(crsfPacket, rcChannels);
-				  sendStatus_2 = CRSF_WritePacket(crsfPacket, CRSF_PACKET_SIZE);
-				  if (sendStatus_2 == HAL_OK) {
-					  packet_counter++; // Increment the counter towards the next poll
-				  }
-				  loopEndtime = (micros() - loopStarttime);
-			  }
-		  }
-		  */
-
-		  else {
-			  loopStarttime = micros();
-			  //CRSF_SetTxMode();
 			  CRSF_PrepareDataPacket(crsfPacket, rcChannels);
 			  sendStatus_2 = CRSF_WritePacket(crsfPacket, CRSF_PACKET_SIZE);
 			  if (sendStatus_2 == HAL_OK) {
 				  packet_counter++; // Increment the counter towards the next poll
 			  }
-			  loopEndtime = (micros() - loopStarttime);
+	          // crsfTime = currentMicros + CRSF_TIME_BETWEEN_FRAMES_US;
 		  }
-		  
-		  /* Recovery Logic: If UART crashed due to noise/collision */
-		  if (hcrsf.uart_error_occurred) {
-			  hcrsf.uart_error_occurred = false;
-			  
-			  // Stop and restart DMA to clear the internal HAL state
-			  HAL_UART_DMAStop(&huart1);
-			  CRSF_SetRXMode();
-			  HAL_UART_ReceiveDMA(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
-		  }
-		  
-		  // Handle Telemetry Reception out of the ISR
-		  if (hcrsf.idlecallback) {
-			  hcrsf.idelcallback = false;
-			  CrsfSerial_UART_IdleCallback(&hcrsf);
-		  }
-
 	      crsfTime = currentMicros + CRSF_TIME_BETWEEN_FRAMES_US;
 	  }
-//	  loopEndtime = (micros() - loopStarttime);
-
+	  /* Recovery Logic: If UART crashed due to noise/collision */
+	  if (hcrsf.uart_error_occurred) {
+	  	  hcrsf.uart_error_occurred = false;
+			  
+	  	  // Stop and restart DMA to clear the internal HAL state
+	  	  HAL_UART_DMAStop(&huart1);
+		  CRSF_SetRXMode();
+	  	  HAL_UART_ReceiveDMA(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
+	  }
+		  
+	  // Handle Telemetry Reception out of the ISR
+	  if (hcrsf.idlecallback) {
+		  hcrsf.idlecallback = false;
+		  CrsfSerial_UART_IdleCallback(&hcrsf);
+	  }
+	  loopEndtime = (micros() - loopStarttime);
 
   }
   /* USER CODE END 3 */
