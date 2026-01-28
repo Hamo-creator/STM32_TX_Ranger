@@ -19,8 +19,12 @@ extern uint8_t  uartRxBuf[];
 extern UART_HandleTypeDef huart1;
 extern CrsfSerial_HandleTypeDef hcrsf;
 
-// crc implementation from CRSF protocol document rev7
+// Human readable RF mode
+const char* ELRS_Modes[] = {
+    "4Hz", "50Hz", "150Hz", "250Hz", "500Hz", "F500", "F1000", "D500", "D250"
+};
 
+// crc implementation from CRSF protocol document rev7
 static uint8_t crsf_crc8tab[256] = {
 
     0x00, 0xD5, 0x7F, 0xAA, 0xFE, 0x2B, 0x81, 0x54, 0x29, 0xFC, 0x56, 0x83, 0xD7, 0x02, 0xA8, 0x7D,
@@ -143,15 +147,16 @@ uint8_t CRSF_WritePacket(uint8_t packet[], uint8_t packetLength)
         return HAL_BUSY;
     }
 
-    CRSF_SetTxMode();
     HAL_UART_DMAStop(&huart1);
+    CRSF_SetTxMode();
 
 	hcrsf.rx_busy = false;
     hcrsf.tx_busy = true;
     hcrsf.idlecallback = false;
-	/*
+	
     // 6. Start the DMA transfer.
     HAL_StatusTypeDef status = HAL_UART_Transmit_DMA(&huart1, packet, packetLength);
+	/*
 	if (status == HAL_OK) {// Wait for TX to finish (or use the Timer method we discussed)
         // Then immediately clear the echo and go back to RX
         while (HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_TX);
@@ -183,18 +188,21 @@ void ProcessByte(CrsfSerial_HandleTypeDef *hcrsf, uint8_t b) {
 	hcrsf->rxBuf[hcrsf->rxBufPos++] = b;
     if (hcrsf->rxBufPos >= 2) {
         uint8_t len = hcrsf->rxBuf[1];
-        if (len >= 3 && hcrsf->rxBufPos >= len + 2) {
+		if (len < 3 || CRSF_MAX_PACKET_SIZE) {
+			ShiftBuffer(hcrsf, 1);
+			return;
+		}
+		// Check if the full packet has arrived
+        if (hcrsf->rxBufPos >= len + 2) {
+			// CRC is calculated on Type + Payload (excludes Addr, Len, and CRC itself)
             uint8_t crc = crc8_dvb_s2(hcrsf->rxBuf + 2, len - 1);
             if (crc == hcrsf->rxBuf[len + 1]) {
                 HandlePacket(hcrsf, len);
-                ShiftBuffer(hcrsf, len + 2);
+                ShiftBuffer(hcrsf, len + 2);// Successfully processed
             } else {	// CRC mismatch, discard this packet
                 ShiftBuffer(hcrsf, 1);
             }
-            ShiftBuffer(hcrsf, len + 2); // Shift buffer past the processed/discarded packet
-        } else if (len > CRSF_MAX_PACKET_SIZE) {
-            // Packet too long, discard
-        	ShiftBuffer(hcrsf, 1); // Discard first byte and try again
+            // ShiftBuffer(hcrsf, len + 2); // Shift buffer past the processed/discarded packet
         }
     }
 }
@@ -208,9 +216,15 @@ void HandlePacket(CrsfSerial_HandleTypeDef *hcrsf, uint8_t len)
     switch (type) {
     case CRSF_FRAMETYPE_BATTERY_SENSOR:	//BATTERY Telemetry
         {
-            // Example payload: voltage in deciV, current in 10mA units
+            // Voltage: 2 bytes, Big Endian (deciVolts)
             hcrsf->telemetry_channels[3] = (hcrsf->rxBuf[3] << 8) | hcrsf->rxBuf[4];
+			// Current: 2 bytes, Big Endian (10mA units)
             hcrsf->telemetry_channels[4] = (hcrsf->rxBuf[5] << 8) | hcrsf->rxBuf[6];
+			// Capacity: 3 bytes, Big Endian (mAh)
+            hcrsf->telemetry_channels[5] = ((hcrsf->rxBuf[7] << 16) | hcrsf->rxBuf[8] << 8) | hcrsf->rxBuf[9];
+			// hcrsf->batterySensor.voltage = (hcrsf->rxBuf[3] << 8) | hcrsf->rxBuf[4];
+			// hcrsf->batterySensor.current = (hcrsf->rxBuf[5] << 8) | hcrsf->rxBuf[6];
+			// hcrsf->batterySensor.capacity = ((hcrsf-<rxBuf[7] << 16) | (hcrsf->rxBuf[8] << 8 )) | hcrsf->rxBuf[9];
             //uint16_t voltage = (hcrsf->rxBuf[3] << 8) | hcrsf->rxBuf[4];
             //uint16_t current = (hcrsf->rxBuf[5] << 8) | hcrsf->rxBuf[6];
             // Store or print it
@@ -220,23 +234,23 @@ void HandlePacket(CrsfSerial_HandleTypeDef *hcrsf, uint8_t len)
 
     case CRSF_FRAMETYPE_LINK_STATISTICS: // LINK_STATISTICS
         {
-			// Copy the raw bytes into our struct
-            memcpy(&LinkStats, hdr->data, sizeof(crsf_link_statistics_t));
-    
-            // CRSF sends RSSI as positive numbers representing -dBm.
-            // Example: 70 actually means -70dBm.
-            display_rssi = (int16_t)LinkStats.uplink_rssi_ant1 * -1;
-            display_lq = LinkStats.uplink_lq;
-    
-            // Optional: Call a callback to update your screen
-            if (hcrsf->onPacketLinkStatistics) {
-                hcrsf->onPacketLinkStatistics();
+			// Use the handle's member 'linkStatistics' to store the data
+            memcpy(&hcrsf->linkStatistics, payload, sizeof(crsf_link_statistics_t));
+			
+            // Map to your global display variables
+            display_rssi = (int16_t)hcrsf->linkStatistics.uplink_rssi_ant1 * -1;
+            display_lq = hcrsf->linkStatistics.uplink_lq;
+			
+			// Get the RF Mode string safely
+            const char* mode_name = "N/A";
+            if (hcrsf->linkStatistics.rf_mode < (sizeof(ELRS_Modes) / sizeof(char*))) {
+                mode_name = ELRS_Modes[hcrsf->linkStatistics.rf_mode];
             }
-            uint8_t uplink_rssi1 = hcrsf->rxBuf[3];
-            uint8_t uplink_rssi2 = hcrsf->rxBuf[4];
-            uint8_t uplink_snr   = hcrsf->rxBuf[5];
-            printf("Link: RSSI1=%u, RSSI2=%u, SNR=%d\r\n",
-                   uplink_rssi1, uplink_rssi2, (int8_t)uplink_snr);
+
+            if (hcrsf->onPacketLinkStatistics) {
+                hcrsf->onPacketLinkStatistics(&hcrsf->linkStatistics);
+            }
+            break;
         }
         break;
 
@@ -264,29 +278,23 @@ void CrsfSerial_Loop(CrsfSerial_HandleTypeDef *hcrsf) {
     }
 }
 
-HAL_StatusTypeDef Crsf_SendTelemetryPoll(CrsfSerial_HandleTypeDef *hcrsf) {
-    uint8_t packet[4]; // Address + Length + Type + CRC
-    uint8_t payload_len = 0; // No payload for a poll
-    uint8_t total_len = payload_len + 2; // Type + Payload + CRC
-
-    packet[0] = ADDR_FC; // Destination address (FC)
-    packet[1] = total_len;
-    packet[2] = CRSF_FRAMETYPE_CMD; // Poll command
-    packet[total_len + 1] = crc8_dvb_s2(&packet[2], payload_len + 1);
-
-    return CRSF_WritePacket(packet, total_len + 2);
-    //return Crsf_TransmitPacket(hcrsf, packet, total_len + 2);
-}
-
 void CrsfSerial_UART_IdleCallback(CrsfSerial_HandleTypeDef *hcrsf)
 {
     uint16_t dmaPos = UART_RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hcrsf->huart->hdmarx);
     uint16_t len;
 
     hcrsf->idlecallback = true;
+	// Safety check: if dmaPos is exactly at the limit, wrap it
+    // if (dmaPos >= UART_RX_BUFFER_SIZE) dmaPos = 0;
 
     if (dmaPos != oldPos) {
         if (dmaPos > oldPos) {
+			// Linear read: data is between oldPos and dmaPos
+            /*
+			for (uint16_t i = oldPos; i < dmaPos; i++) {
+                ProcessByte(hcrsf, uartRxBuf[i]);
+            }
+			*/
             len = dmaPos - oldPos;
             for (uint16_t i = 0; i < len; i++) {
                 ProcessByte(hcrsf, uartRxBuf[oldPos + i]);
@@ -300,6 +308,19 @@ void CrsfSerial_UART_IdleCallback(CrsfSerial_HandleTypeDef *hcrsf)
                 ProcessByte(hcrsf, uartRxBuf[i]);
             }
         }
+		/*
+		else {
+            // Wrapped read: data is from oldPos to end, AND from start to dmaPos
+            // Part 1: From oldPos to end of buffer
+            for (uint16_t i = oldPos; i < UART_RX_BUFFER_SIZE; i++) {
+                ProcessByte(hcrsf, uartRxBuf[i]);
+            }
+            // Part 2: From start of buffer to dmaPos
+            for (uint16_t i = 0; i < dmaPos; i++) {
+                ProcessByte(hcrsf, uartRxBuf[i]);
+            }
+		}
+		*/
 
         oldPos = dmaPos;
         if (oldPos >= UART_RX_BUFFER_SIZE) oldPos = 0;
@@ -335,13 +356,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
     	CRSF_SetRxMode();
     	hcrsf.tx_busy = false;
     	//hcrsf.rx_busy = false;
+		// oldPos = 0;
 		// 2. RESTART receiving now that the line is clear
         // This ensures the next byte from the Ranger goes to uartRxBuf[0]
         HAL_UART_Receive_DMA(&huart1, uartRxBuf, UART_RX_BUFFER_SIZE);
     }
 }
-
-// --- External Global Variables (for debugging) ---
-volatile uint8_t g_last_crsf_packet_type = 0;
-
 
